@@ -107,3 +107,33 @@ def process_folder_to_hdf5_video(folder_path, hdf5_path, video_path):
         expected += 1
 
     pkl_files_to_hdf5_and_video(pkl_files, hdf5_path, video_path)
+
+
+def process_folder_to_video(folder_path, video_path):
+    """把采集缓存中的 pkl 帧合成为视频，但不生成 HDF5。
+
+    采集失败的 episode 没有训练数据可保存，但其缓存帧对调试专家动作很有用。
+    这个轻量入口复用与正常数据保存相同的帧读取和 ffmpeg 编码逻辑，避免为了
+    保存失败视频而额外产生一个看似成功的数据集文件。
+    """
+    pkl_files = []
+    for fname in os.listdir(folder_path):
+        if fname.endswith(".pkl") and fname[:-4].isdigit():
+            pkl_files.append((int(fname[:-4]), os.path.join(folder_path, fname)))
+
+    if not pkl_files:
+        raise FileNotFoundError(f"No valid .pkl files found in {folder_path}")
+
+    pkl_files.sort()
+    expected = 0
+    for frame_num, _ in pkl_files:
+        if frame_num != expected:
+            raise ValueError(f"Missing file {expected}.pkl")
+        expected += 1
+
+    frames = []
+    for _, pkl_file_path in pkl_files:
+        frame = load_pkl_file(pkl_file_path)
+        frames.append(frame["observation"]["head_camera"]["rgb"])
+
+    images_to_video(np.asarray(frames), out_path=video_path)

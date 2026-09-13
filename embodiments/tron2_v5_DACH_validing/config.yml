@@ -55,9 +55,13 @@ gripper_scale: [-0.0045, 0.0375]
 
 # Reordered from the historical yaw/pitch/roll config into chain order:
 # pitch, roll, yaw, elbow, wrist_yaw, wrist_pitch, wrist_roll.
+# homestate:
+#   - [0.8477, 0.124, -0.1424, -2.3204, 0.0, 0.0, 0.0]
+#   - [0.8477, -0.124, 0.1424, -2.3204, 0.0, 0.0, 0.0]
+
 homestate:
-  - [0.8477, 0.124, -0.1424, -2.3204, 0.0, 0.0, 0.0]
-  - [0.8477, -0.124, 0.1424, -2.3204, 0.0, 0.0, 0.0]
+  - [1.04, 2.59, 0.31, -1.21, -0.51, -0.63, 0.0]
+  - [1.04, -2.59, -0.31, -1.21, 0.51, -0.63, 0.0]
 
 delta_matrix: [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
 global_trans_matrix: [[1, 0, 0], [0, -1, 0], [0, 0, -1]]

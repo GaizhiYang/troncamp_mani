@@ -10,16 +10,16 @@ import transforms3d as t3d
 # Replaces the stock move_bowl (place_actor is broken on Tron2). User video-diagnosed every bug:
 # rim-grasp depth GEO_GRASP_DIS=0.03 (sweep best, +15pp vs 0.04 "夹太高"), gentle place (no ram),
 # per-bowl x-side arm choice. Reps-stable SR ~43% (curobo-noise-limited floor).
-_GEO_LIFT = float(os.environ.get("GEO_LIFT", "0.10"))
+_GEO_LIFT = float(os.environ.get("GEO_LIFT", "0.14"))
 _GEO_PLACE_Z = float(os.environ.get("GEO_PLACE_Z", "0.0"))
-_GEO_NEST_OFF = float(os.environ.get("GEO_NEST_OFF", "0.04"))
+_GEO_NEST_OFF = float(os.environ.get("GEO_NEST_OFF", "0.06"))
 _GEO_PRE_Z = float(os.environ.get("GEO_PRE_Z", "0.08"))
 _GEO_BASE_Z = float(os.environ.get("GEO_BASE_Z", "0.755"))
-_GEO_GENTLE_GAP = float(os.environ.get("GEO_GENTLE_GAP", "0.008"))
-_GEO_GRASP_DIS = float(os.environ.get("GEO_GRASP_DIS", "0.03"))
+_GEO_GENTLE_GAP = float(os.environ.get("GEO_GENTLE_GAP", "0.00"))
+_GEO_GRASP_DIS = float(os.environ.get("GEO_GRASP_DIS", "0.02"))
 _GEO_GRIP_POS = float(os.environ.get("GEO_GRIP_POS", "0.0"))
-_CP_ORDER = {"left": [1, 0, 2, 3], "right": [1, 3, 0, 2]}  # best-holding contact points first
-
+# _CP_ORDER = {"left": [1, 0, 2, 3], "right": [1, 3, 0, 2]}  # best-holding contact points first
+_CP_ORDER = {"left": [3], "right": [1]} 
 
 def _mat_of(p, q):
     M = np.eye(4)
@@ -65,7 +65,23 @@ class stack_bowls_three(Base_Task):
                 )
             bowl_pose_lst.append(deepcopy(bowl_pose))
 
-        bowl_pose_lst = sorted(bowl_pose_lst, key=lambda x: x.p[1])
+        # 抓取顺序按左右两侧分别定义，而不是按 y 坐标排序：
+        #   - x < 0 的碗由左臂负责，从最左侧开始向右抓；
+        #   - x >= 0 的碗由右臂负责，从最右侧开始向左抓。
+        #
+        # 两侧合并为一个串行顺序，左侧碗在前、右侧碗在后。这样每个碗的
+        # 实际负责机械臂仍由 move_bowl_geo() 根据 x 符号判定，同时执行顺序
+        # 与每只手的工作方向保持一致。
+        left_bowls = sorted(
+            (pose for pose in bowl_pose_lst if pose.p[0] < 0),
+            key=lambda pose: pose.p[0],
+        )
+        right_bowls = sorted(
+            (pose for pose in bowl_pose_lst if pose.p[0] >= 0),
+            key=lambda pose: pose.p[0],
+            reverse=True,
+        )
+        bowl_pose_lst = left_bowls + right_bowls
 
         def create_bowl(bowl_pose):
             return create_actor(self, pose=bowl_pose, modelname="002_bowl", model_id=3, convex=True)

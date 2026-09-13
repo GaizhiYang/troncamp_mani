@@ -7,12 +7,14 @@ from sapien.render import clear_cache
 from collections import OrderedDict
 import pdb
 from envs import *
+from envs.utils.pkl2hdf5 import process_folder_to_video
 import yaml
 import importlib
 import json
 import traceback
 import os
 import time
+import shutil
 from argparse import ArgumentParser
 
 current_file_path = os.path.abspath(__file__)
@@ -112,6 +114,20 @@ def _handle_replay_result(TASK_ENV, args, episode_idx, seed_list):
     # a post-pass (merge), so a hole here is tolerated.
     if TASK_ENV.check_success():
         return
+    # The replay phase has already merged its cache into video/ before this
+    # check. Preserve that video under fail_video/ before optionally deleting
+    # the failed HDF5 below.
+    replay_video = os.path.join(args["save_path"], "video", f"episode{episode_idx}.mp4")
+    if os.path.isfile(replay_video):
+        fail_dir = os.path.join(args["save_path"], "fail_video")
+        os.makedirs(fail_dir, exist_ok=True)
+        seed = seed_list[episode_idx] if episode_idx < len(seed_list) else episode_idx
+        fail_video = os.path.join(fail_dir, f"fail_seed{seed}_episode{episode_idx}_replay.mp4")
+        try:
+            shutil.move(replay_video, fail_video)
+            print(f"[failed-video] saved: {fail_video}")
+        except OSError as exc:
+            print(f"[failed-video] could not move replay video: {exc}")
     if os.environ.get('ROBOTWIN_SKIP_FAILED_REPLAY', '0') != '1':
         raise AssertionError('Collect Error')
     data_path = os.path.join(args['save_path'], 'data', 'episode' + str(episode_idx) + '.hdf5')
@@ -119,6 +135,37 @@ def _handle_replay_result(TASK_ENV, args, episode_idx, seed_list):
         os.remove(data_path)
     print('[skip-replay] episode ' + str(episode_idx) + ' failed replay; dropped, continuing '
           '(leaves a numbering hole — renumber before process_data)')
+
+
+def _save_failed_episode_video(TASK_ENV, args, seed, episode_idx):
+    """保存失败 episode 的 head-camera 缓存视频，供专家动作调试。
+
+    单趟采集时 save_data=True，缓存位于 ``.cache/episode<N>``。失败轨迹不应
+    写入 data/，但在清理缓存前把同一批 pkl 帧编码到 fail_video/。若失败发生
+    在第一帧之前，缓存不存在或为空，此时只打印提示并继续采集。
+    """
+    cache_dir = os.path.join(args["save_path"], ".cache", f"episode{episode_idx}")
+    if not os.path.isdir(cache_dir):
+        return None
+
+    frame_files = [
+        name for name in os.listdir(cache_dir)
+        if name.endswith(".pkl") and name[:-4].isdigit()
+    ]
+    if not frame_files:
+        return None
+
+    fail_dir = os.path.join(args["save_path"], "fail_video")
+    os.makedirs(fail_dir, exist_ok=True)
+    video_path = os.path.join(fail_dir, f"fail_seed{seed}_episode{episode_idx}.mp4")
+    try:
+        process_folder_to_video(cache_dir, video_path)
+        print(f"[failed-video] saved: {video_path}")
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        return video_path
+    except Exception as exc:  # noqa: BLE001 - diagnostics must not stop collection
+        print(f"[failed-video] could not save seed {seed}: {exc}")
+        return None
 
 
 def run(TASK_ENV, args):
@@ -215,6 +262,7 @@ def run(TASK_ENV, args):
                 else:
                     print(f"simulate data episode {suc_num} fail! (seed = {epid})")
                     fail_num += 1
+                    _save_failed_episode_video(TASK_ENV, args, epid, suc_num)
 
                 TASK_ENV.close_env()
 
@@ -226,6 +274,7 @@ def run(TASK_ENV, args):
                 print("Error: ", e)
                 print(" -------------")
                 fail_num += 1
+                _save_failed_episode_video(TASK_ENV, args, epid, suc_num)
                 TASK_ENV.close_env()
 
                 if args["render_freq"]:
@@ -238,6 +287,7 @@ def run(TASK_ENV, args):
                 print("Error: ", e)
                 print(" -------------")
                 fail_num += 1
+                _save_failed_episode_video(TASK_ENV, args, epid, suc_num)
                 TASK_ENV.close_env()
 
                 if args["render_freq"]:
@@ -304,6 +354,8 @@ def run(TASK_ENV, args):
                 # empty joint path when replay picks a different arm than search). Never let it
                 # take down the whole run silently.
                 print(f"\033[91m[replay-crash] episode {episode_idx}: {e}\033[0m")
+                replay_seed = seed_list[episode_idx] if episode_idx < len(seed_list) else episode_idx
+                _save_failed_episode_video(TASK_ENV, args, replay_seed, episode_idx)
                 # Best-effort cleanup so a crashed episode leaks no sapien scene or partial
                 # cache (the normal close_env/remove_data_cache at the loop tail is skipped
                 # when we bail out here). Target this episode's cache dir directly rather than

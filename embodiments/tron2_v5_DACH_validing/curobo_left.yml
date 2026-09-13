@@ -3,7 +3,7 @@
 
 robot_cfg:
   kinematics:
-    urdf_path: __KIT_ROOT__/embodiments/tron2_v5_DACH_validing/robot.urdf
+    urdf_path: /home/hehui/troncamp-mani/embodiments/tron2_v5_DACH_validing/robot.urdf
 
     base_link: "base_Link"
     tool_frames: ["tcp_L_Link"]
@@ -21,7 +21,7 @@ robot_cfg:
         "grasper_L_jaw_left_Link",
         "grasper_L_jaw_right_Link"
       ]
-    collision_spheres: __KIT_ROOT__/embodiments/tron2_v5_DACH_validing/collision_tron2_left.yml
+    collision_spheres: /home/hehui/troncamp-mani/embodiments/tron2_v5_DACH_validing/collision_tron2_left.yml
     collision_sphere_buffer: 0.004
     extra_collision_spheres: {}
     use_global_cumul: True
@@ -93,7 +93,7 @@ robot_cfg:
           "wrist_pitch_L_Joint",
           "wrist_roll_L_Joint"
         ]
-      default_joint_position: [0.8477, 0.124, -0.1424, -2.3204, 0.0, 0.0, 0.0]
+      default_joint_position: [1.04, 2.59, 0.31, -1.21, -0.51, -0.63, 0.0]
       null_space_weight: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
       cspace_distance_weight: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
       max_jerk: 100.0
